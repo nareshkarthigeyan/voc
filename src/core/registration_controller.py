@@ -10,10 +10,10 @@ from database.user_dao import insert_user
 from database.feature_dao import insert_features
 from database.model_dao import insert_kmeans_model
 
-from secure_voc_logger import log_user_data
-from verification_controller import generate_embedding
+from utils.secure_voc_logger import log_user_data
+from core.verification_controller import generate_embedding
 
-from Fan_controller import FanController
+from sensors.Fan_controller import FanController
 
 
 import os

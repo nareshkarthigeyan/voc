@@ -1,7 +1,7 @@
 from tools.xml_dataset_loader import load_voc_samples_grouped_by_user
-from Features.feature_extractor import extract_features
-from Database.user_dao import insert_user
-from Database.feature_dao import insert_features
+from core.feature_extractor import extract_features
+from database.user_dao import insert_user
+from database.feature_dao import insert_features
 
 # ---------- CONFIG ----------
 XML_PATH = "VOC_User_Data/voc_log3.xml"
