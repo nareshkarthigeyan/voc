@@ -6,6 +6,7 @@ import joblib
 from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.preprocessing import LabelEncoder, StandardScaler
+from xgboost import XGBClassifier
 from sklearn.neural_network import MLPClassifier
 
 def train_ensemble(csv_path, sensor_mode):
