@@ -322,6 +322,7 @@ class MainGUI(ctk.CTk):
                         result_box.insert(
                             "end",
                             f"✅ VERIFIED\n\n"
+                            f"User ID: {result['user_id']}\n"
                             f"Name: {result['user_name']}\n"
                             f"Overall Confidence: {result['confidence']}%\n"
                         )
@@ -333,7 +334,9 @@ class MainGUI(ctk.CTk):
                     else:
                         result_box.insert(
                             "end",
-                            f"❌ NOT VERIFIED\n\n"
+                            f"❌ NOT VERIFIED (Under Confidence Threshold)\n\n"
+                            f"Top Guess ID: {result['user_id']}\n"
+                            f"Top Guess Name: {result['user_name']}\n"
                             f"Overall Confidence: {result['confidence']}%\n"
                         )
 

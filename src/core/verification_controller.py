@@ -63,11 +63,12 @@ def verify_user(round_feature_list):
         round_vote = {}
         for model_name, prob in probs.items():
             idx = np.argmax(prob)
-            name = label_encoder.inverse_transform([idx])[0]
+            model_pred_id = label_encoder.inverse_transform([idx])[0]
+            model_pred_name = get_user_name(model_pred_id) or "Unknown Name"
             conf = round(float(prob[idx] * 100), 2)
 
             round_vote[model_name] = {
-                "user_name": name,
+                "user_name": f"{model_pred_name} (ID: {model_pred_id})",
                 "confidence": conf
             }
 
@@ -84,13 +85,13 @@ def verify_user(round_feature_list):
 
     #final_name = label_encoder.inverse_transform([final_index])[0]
     predict_user_id = label_encoder.inverse_transform([final_index])[0]
-    predict_user_name = get_user_name(predict_user_id)
+    predict_user_name = get_user_name(predict_user_id) or f"Unknown Name"
     
     status = "VERIFIED" if final_confidence >= 70 else "NOT VERIFIED"
 
     result = {
         "status": status,
-        "user_name": predict_user_name if status=="VERIFIED" else None,
+        "user_name": predict_user_name,
         "user_id": predict_user_id,
         "confidence": final_confidence,
         "round_details": detailed_votes

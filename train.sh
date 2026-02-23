@@ -20,6 +20,9 @@ fi
 echo "[SYSTEM] VOC Training Pipeline Initialized"
 echo "[SYSTEM] Configuration: ${SENSOR_MODE}-Sensor Array"
 
+# Ensure we are in the project root
+cd "$(dirname "$0")" || exit
+
 # 1. Export Data
 echo "[STEP 1/2] Data Acquisition: Exporting registration features from SQL to CSV..."
 python3 training/export_data.py
