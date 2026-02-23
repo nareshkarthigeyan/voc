@@ -52,16 +52,22 @@ To run the full biometric registration and verification cycle with live sensors,
 ./run.sh --sensors 12
 ```
 
-### 2. Machine Learning Pipeline
+### 2. Machine Learning Pipeline (Training)
 
-Model training is conducted offline. Use the `training/` module to update the models based on aggregated user data.
+After registering new users, the models must be retrained to recognize them. Use the `train.sh` script to automate the export and training process.
 
 ```bash
-cd training
-python train_ann.py
+# Retrain for 6-sensor configuration
+./train.sh --sensors 6
+
+# Retrain for 12-sensor configuration
+./train.sh --sensors 12
 ```
 
-Model export scripts (e.g., `Export_models_to_ONNX.py`) are placed here to export parameters into the `models/` directory for application inference.
+This script will:
+1. Export the latest registration features from the SQLite database to a CSV.
+2. Train a full ensemble (Random Forest, Extra Trees, XGBoost, and ANN).
+3. Update the models in the `models/` directory for the next app launch.
 
 ## Security & Privacy
 
