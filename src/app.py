@@ -134,14 +134,15 @@ class MainGUI(ctk.CTk):
                 return_code = process.wait()
 
                 if return_code == 0:
-                    self.safe_ui(lambda: status_label.configure(text="✅ Training Complete! Models updated.", text_color="green"))
+                    self.safe_ui(lambda: status_label.configure(text="Training Complete! Models updated.", text_color="green"))
                 else:
-                    self.safe_ui(lambda: status_label.configure(text="❌ Training Failed. Check logs above.", text_color="red"))
+                    self.safe_ui(lambda: status_label.configure(text="Training Failed. Check logs above.", text_color="red"))
             except Exception as e:
                 self.safe_ui(lambda err=e: log_box.insert("end", f"Error launching training script: {err}\n"))
-                self.safe_ui(lambda: status_label.configure(text="❌ Critical Execution Error", text_color="red"))
+                self.safe_ui(lambda: status_label.configure(text="Critical Execution Error", text_color="red"))
 
         # Launch training in background
+
         threading.Thread(target=run_training, daemon=True).start()
 
         ctk.CTkButton(
@@ -358,6 +359,36 @@ class MainGUI(ctk.CTk):
                     canvas = FigureCanvasTkAgg(fig, master=self.frame)
                     canvas.draw()
                     canvas.get_tk_widget().pack(pady=10)
+                    
+                    # ---------------- FLAG AS INCORRECT ----------------
+                    def flag_as_wrong():
+                        dialog = ctk.CTkInputDialog(
+                            text="Prediction was wrong? Enter the CORRECT User ID to reinforce the model:",
+                            title="Flag Incorrect / Reinforce"
+                        )
+                        correct_id = dialog.get_input()
+                        
+                        if correct_id and correct_id.strip():
+                            correct_id = correct_id.strip()
+                            try:
+                                for r_idx, f_dict in enumerate(all_round_features):
+                                    store_features(correct_id, f_dict, r_idx + 1)
+                                
+                                messagebox.showinfo(
+                                    "Data Added", 
+                                    f"Added new fingerprint for User ID '{correct_id}'.\nPlease run the 'Train / Update' pipeline from the main menu to learn this signature!"
+                                )
+                                self.show_main_menu()
+                            except Exception as e:
+                                messagebox.showerror("Database Error", f"Failed to save corrected features: {e}")
+                    
+                    ctk.CTkButton(
+                        self.frame,
+                        text="Flag Incorrect (Reinforce Model)",
+                        fg_color="crimson",
+                        hover_color="darkred",
+                        command=flag_as_wrong
+                    ).pack(pady=10)
 
                     status_label.configure(text="Verification Completed")
 
