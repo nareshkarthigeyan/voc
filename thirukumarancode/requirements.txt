@@ -1,0 +1,12 @@
+Flask
+joblib
+numpy
+scikit-learn
+pyfingerprint
+adafruit-blinka
+adafruit-circuitpython-rgb-display
+adafruit-circuitpython-ads1x15
+adafruit-circuitpython-dht
+Pillow
+gpiozero
+xgboost
