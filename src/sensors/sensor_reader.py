@@ -115,24 +115,28 @@ class VOCSensor:
         return 0.0, 0.0
 
     def _validate_signal(self, voc_readings):
-
         values = [v for v in voc_readings.values() if v is not None]
 
         if len(values) == 0:
-            return False
+            msg = "No sensor values retrieved"
+            print(f"[VALIDATION] {msg}")
+            return False, msg
 
         # How many sensors are producing meaningful signal?
-        active_sensors = sum(1 for v in values if abs(v) > 0.5)
-
+        active_sensors = sum(1 for v in values if abs(v) > 0.1)
         variance = np.var(values)
 
         if active_sensors < MIN_ACTIVE_SENSORS:
-            return False
+            msg = f"Insufficient active sensors ({active_sensors}/{MIN_ACTIVE_SENSORS})"
+            print(f"[VALIDATION] {msg}")
+            return False, msg
 
-        if variance < MIN_VARIANCE_THRESHOLD:
-            return False
+        if variance < 0.001:
+            msg = f"Sensor variance too low ({variance:.4f})"
+            print(f"[VALIDATION] {msg}")
+            return False, msg
 
-        return True
+        return True, ""
 
 
     def read_sensors(self):
@@ -178,8 +182,9 @@ class VOCSensor:
                 voc_readings["mems_odor_2"]    = self.mems_to_ppm(self._safe_voltage(self.mems_odor_2), "odor")
 
             # ---------- Validate ----------
-            if not self._validate_signal(voc_readings):
-                return "ERROR", {}, {}
+            is_valid, error_msg = self._validate_signal(voc_readings)
+            if not is_valid:
+                return f"ERROR: {error_msg}", {}, {}
 
             # ---------- ENV ----------
             temp, hum = self._read_dht()
@@ -189,5 +194,6 @@ class VOCSensor:
             return "OK", voc_readings, env_readings
 
         except Exception as e:
-            print("[SENSOR ERROR]", e)
-            return "ERROR", {}, {}
+            err_str = f"Hardware Exception: {str(e)}"
+            print(f"[SENSOR ERROR] {err_str}")
+            return err_str, {}, {}

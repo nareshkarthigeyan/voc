@@ -192,8 +192,8 @@ class MainGUI(ctk.CTk):
 
             if status != "OK":
                 self.safe_ui(lambda: messagebox.showerror(
-                    "Sensors Not Active",
-                    "VOC sensors not responding."
+                    "Sensor Error",
+                    f"Hardware Feedback: {status}"
                 ))
                 return
 
@@ -256,23 +256,25 @@ class MainGUI(ctk.CTk):
                                  result_box.insert("end", f"Round {r} saved\n"))
 
                 self.hand.stop_sampling()
-
                 log_voc("REGISTRATION", user_name, user_id, samples)
 
-                self.safe_ui(lambda:
-                             result_box.insert("end", "\nRegistration completed\n"))
-                '''
-                # FAN FLUSH
-                threading.Thread(
-                    target=get_fan().flush,
-                    args=(20,),
-                    daemon=True
-                ).start()
+                self.safe_ui(lambda: result_box.insert("end", "\n[SUCCESS] Registration completed for " + user_name + "\n"))
+                
+                # Run fan flush in background so UI doesn't freeze
+                threading.Thread(target=get_fan().flush, args=(20,), daemon=True).start()
+                
+                # Show navigation options
+                def show_completion_buttons():
+                    ctk.CTkButton(
+                        self.frame,
+                        text="Go Back to Main Menu",
+                        fg_color="green",
+                        hover_color="darkgreen",
+                        command=self.show_main_menu
+                    ).pack(pady=20)
+                    self.ask_next_registration()
 
-                self.safe_ui(lambda: self.ask_next_registration())
-                '''
-                get_fan().flush(20)
-                self.safe_ui(lambda: self.ask_next_registration())
+                self.safe_ui(show_completion_buttons)
             # ================= VERIFICATION =================
             else:
 
