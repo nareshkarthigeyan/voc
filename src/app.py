@@ -12,6 +12,9 @@ from core.verification_controller import verify_user
 from sensors.fan_manager import get_fan
 
 import os
+import subprocess
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 # ---------------- CONFIG ----------------
 SAMPLE_COUNT = 10
@@ -70,6 +73,16 @@ class MainGUI(ctk.CTk):
 
         ctk.CTkButton(
             self.frame,
+            text="Train / Update Ensemble Models",
+            height=60,
+            width=400,
+            fg_color="orange",
+            hover_color="darkorange",
+            command=self.training_mode
+        ).pack(pady=20)
+
+        ctk.CTkButton(
+            self.frame,
             text="Exit",
             height=45,
             fg_color="red",
@@ -81,6 +94,61 @@ class MainGUI(ctk.CTk):
 
     def verification_mode(self):
         self.capture_mode(mode="verification")
+
+    # ================= TRAINING MODE =================
+    def training_mode(self):
+        self.clear()
+
+        ctk.CTkLabel(
+            self.frame,
+            text="Ensemble Model Training",
+            font=("Arial", 28, "bold")
+        ).pack(pady=20)
+
+        status_label = ctk.CTkLabel(self.frame, text="Initializing training pipeline...", text_color="orange")
+        status_label.pack(pady=10)
+
+        log_box = ctk.CTkTextbox(self.frame, width=900, height=400, font=("Courier", 12))
+        log_box.pack(pady=20)
+
+        def run_training():
+            try:
+                # Resolve script path
+                script_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "train.sh"))
+                
+                # Start the training process
+                process = subprocess.Popen(
+                    [script_path, "--sensors", str(SENSOR_MODE)],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1
+                )
+
+                # Stream output live
+                for line in iter(process.stdout.readline, ""):
+                    self.safe_ui(lambda l=line: log_box.insert("end", l))
+                    self.safe_ui(lambda: log_box.see("end"))
+
+                process.stdout.close()
+                return_code = process.wait()
+
+                if return_code == 0:
+                    self.safe_ui(lambda: status_label.configure(text="✅ Training Complete! Models updated.", text_color="green"))
+                else:
+                    self.safe_ui(lambda: status_label.configure(text="❌ Training Failed. Check logs above.", text_color="red"))
+            except Exception as e:
+                self.safe_ui(lambda err=e: log_box.insert("end", f"Error launching training script: {err}\n"))
+                self.safe_ui(lambda: status_label.configure(text="❌ Critical Execution Error", text_color="red"))
+
+        # Launch training in background
+        threading.Thread(target=run_training, daemon=True).start()
+
+        ctk.CTkButton(
+            self.frame,
+            text="Back to Menu",
+            command=self.show_main_menu
+        ).pack(pady=20)
 
     # ================= CAPTURE MODE =================
     def capture_mode(self, mode):
@@ -254,7 +322,7 @@ class MainGUI(ctk.CTk):
                             "end",
                             f"✅ VERIFIED\n\n"
                             f"Name: {result['user_name']}\n"
-                            f"Confidence: {result['confidence']}%\n"
+                            f"Overall Confidence: {result['confidence']}%\n"
                         )
                         threading.Thread(
                             target=get_fan().flush,
@@ -265,8 +333,31 @@ class MainGUI(ctk.CTk):
                         result_box.insert(
                             "end",
                             f"❌ NOT VERIFIED\n\n"
-                            f"Confidence: {result['confidence']}%\n"
+                            f"Overall Confidence: {result['confidence']}%\n"
                         )
+
+                    # Log detailed voting
+                    result_box.insert("end", "\n--- Final Round Detailed Votes ---\n")
+                    last_round = result["round_details"][-1]["votes"]
+                    models, confidences = [], []
+                    for model, vote in last_round.items():
+                        result_box.insert(
+                            "end",
+                            f"{model}: {vote['user_name']} ({vote['confidence']}%)\n"
+                        )
+                        models.append(model)
+                        confidences.append(vote['confidence'])
+
+                    ### GRAPH PLOTTING ###
+                    fig, ax = plt.subplots(figsize=(6, 3), dpi=100)
+                    ax.bar(models, confidences, color=['blue', 'green', 'orange', 'purple', 'red'])
+                    ax.set_ylim(0, 100)
+                    ax.set_ylabel('Confidence (%)')
+                    ax.set_title('Final Round Model Probabilities')
+                    
+                    canvas = FigureCanvasTkAgg(fig, master=self.frame)
+                    canvas.draw()
+                    canvas.get_tk_widget().pack(pady=10)
 
                     status_label.configure(text="Verification Completed")
 
