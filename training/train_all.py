@@ -10,27 +10,39 @@ from xgboost import XGBClassifier
 from sklearn.neural_network import MLPClassifier
 
 def train_ensemble(csv_path, sensor_mode):
-    print(f"Loading training data for {sensor_mode} sensor mode...")
-    df = pd.read_csv(csv_path)
+    print(f"[LOG] Training cycle initiated for SENSOR_MODE: {sensor_mode}")
+    print(f"[LOG] Loading dataset from: {csv_path}")
     
+    try:
+        df = pd.read_csv(csv_path)
+    except Exception as e:
+        print(f"[ERROR] Failed to read CSV: {str(e)}")
+        return
+
     if df.empty:
-        print("Error: Empty training data.")
+        print("[ERROR] Training failed: Dataset is empty.")
         return
 
     # Separate labels and features
     y = df["user_id"]
     X = df.drop(columns=["user_id", "round_no"])
     
+    print(f"[LOG] Feature matrix shape: {X.shape}")
+    print(f"[LOG] Label vector shape: {y.shape}")
+    
     # Save feature order
     feature_order = list(X.columns)
+    print(f"[LOG] Extracted {len(feature_order)} high-dimensional features.")
     
     # Encode labels
     le = LabelEncoder()
     y_enc = le.fit_transform(y)
+    print(f"[LOG] Encoded {len(le.classes_)} classes: {list(le.classes_)}")
     
     # Scale features for MLP
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
+    print("[LOG] Features normalized using StandardScaler.")
     
     # Define models
     models_to_train = {
@@ -43,23 +55,29 @@ def train_ensemble(csv_path, sensor_mode):
     
     output_dir = os.path.join("models", f"{sensor_mode}_sensors")
     os.makedirs(output_dir, exist_ok=True)
+    print(f"[LOG] Target output directory: {output_dir}")
     
     for name, model in models_to_train.items():
-        print(f"Training {name}...")
+        print(f"[TRAIN] Fitting {name} ensemble...")
         if name == "ann_model":
             model.fit(X_scaled, y_enc)
         else:
             model.fit(X, y_enc)
-        joblib.dump(model, os.path.join(output_dir, f"{name}.pkl"))
+        
+        # Calculate training accuracy as feedback
+        score = model.score(X_scaled if name == "ann_model" else X, y_enc)
+        print(f"[RES] {name} trained. Training Accuracy: {score:.4f}")
+        
+        export_path = os.path.join(output_dir, f"{name}.pkl")
+        joblib.dump(model, export_path)
+        print(f"[LOG] {name} serialized to disk.")
     
     # Save Scaler and meta
     joblib.dump(scaler, os.path.join(output_dir, "ann_scaler.pkl"))
     joblib.dump(le, os.path.join(output_dir, "label_encoder.pkl"))
     joblib.dump(feature_order, os.path.join(output_dir, "feature_order.pkl"))
     
-    print(f"✅ All models trained and saved to {output_dir}")
-    
-    print(f"✅ All models trained and saved to {output_dir}")
+    print(f"[SUCCESS] Ensemble training complete for {sensor_mode} sensor mode.")
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

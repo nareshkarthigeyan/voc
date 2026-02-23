@@ -17,25 +17,26 @@ if [[ "$SENSOR_MODE" != "6" && "$SENSOR_MODE" != "12" ]]; then
     exit 1
 fi
 
-echo "--- VOC Training Pipeline ---"
-echo "Target: ${SENSOR_MODE}-Sensor Mode"
+echo "[SYSTEM] VOC Training Pipeline Initialized"
+echo "[SYSTEM] Configuration: ${SENSOR_MODE}-Sensor Array"
 
 # 1. Export Data
-echo "[1/2] Exporting current database to CSV..."
+echo "[STEP 1/2] Data Acquisition: Exporting registration features from SQL to CSV..."
 python3 training/export_data.py
 
 if [ $? -ne 0 ]; then
-    echo "❌ Export failed. Aborting."
+    echo "[CRITICAL] Data acquisition failed. Training terminated."
     exit 1
 fi
 
 # 2. Train Models
-echo "[2/2] Training ensemble models (RF, ET, DT, XGB, ANN)..."
+echo "[STEP 2/2] Learning Phase: Firing ensemble training (RF, ET, DT, XGB, ANN)..."
 python3 training/train_all.py $SENSOR_MODE
 
 if [ $? -ne 0 ]; then
-    echo "❌ Training failed."
+    echo "[CRITICAL] Model optimization failed. Check logs for details."
     exit 1
 fi
 
-echo "✅ Training complete. Models updated in models/${SENSOR_MODE}_sensors/"
+echo "[SUCCESS] Pipeline execution finished. Neural weights and ensemble parameters updated."
+echo "[INFO] Target Directory: models/${SENSOR_MODE}_sensors/"
