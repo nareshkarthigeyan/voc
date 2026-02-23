@@ -1,74 +1,88 @@
-# VOC Biometric System
+# Volatile Organic Compound (VOC) Biometric System
 
-A state-of-the-class Machine Learning and Sensor-based system for Volatile Organic Compound (VOC) Biometric verification. This repository handles real-time sensor ingestion, secure data logging, and on-board model inference, supporting both **6-sensor** and **12-sensor** hardware arrays.
+A high-fidelity hardware and machine learning framework for biometric verification using VOC sensor arrays. This system integrates real-time hardware signal processing with a multi-model ensemble for robust subject identification.
 
-## Repository Structure
+## System Architecture
 
-The project has been restructured to strictly separate machine learning training pipelines from hardware sensor interfaces.
+The project is structured to enforce a strict separation between hardware data acquisition and machine learning optimization.
 
-- `src/`: Core application logic. Contains the main UI, connection code, and real-time database logging.
-  - `app.py`: The entry point for the desktop application (Registration & Verification modes).
-  - `sensors/`: Hardware interaction (I2C/Serial interfaces).
-  - `core/`: Verification logic and ensemble models.
-  - `database/`: Database insertion and logger.
-  - `utils/`: Encryption / decryption tools for logs.
-- `training/`: Dedicated isolated module for training ML algorithms (XGBoost, Random Forest) on collected datasets.
-- `models/`: Pre-trained ONNX and pickle models consumed during runtime for inference (split into `6_sensors` and `12_sensors`).
-- `data/`: SQLite databases and XML logs.
+### Directory Structure
+*   `src/`: Primary executable source code.
+    *   `app.py`: Main GUI application entry point.
+    *   `sensors/`: Low-level drivers for I2C ADCs (ADS1115), DHT11, and GPIO controllers.
+    *   `core/`: High-level controllers for registration, verification, and feature extraction.
+    *   `database/`: SQLite abstraction layer and secure logging utilities.
+    *   `utils/`: Cryptographic tools and auxiliary dataset loaders.
+*   `training/`: Isolated machine learning pipeline for offline model optimization.
+*   `models/`: Directory for serialized model parameters (Pickle/Joblib), organized by sensor configuration (6 vs 12).
+*   `data/`: Persistent storage for SQLite databases and encrypted XML event logs.
 
-## Hardware Setup
+## Hardware Configuration
 
-The project supports two distinct physical arrays. It requires the following components:
-1. Raspberry Pi (or compatible embedded Linux system with I2C/GPIO exposed).
-2. **6 or 12 Gas/VOC Sensors** (e.g., MQ series, MEMS series) interfacing over I2C through ADS1115 ADCs.
-3. Connected Fan for environment flushing.
-4. Optical/IR Hand-presence sensor.
+The system is designed for deployment on Raspberry Pi or equivalent Linux-based embedded platforms with I2C support.
 
-## Installation
+### Requirements
+1.  **Processor**: Raspberry Pi 4B or better recommended for inference latency.
+2.  **ADC**: Up to three ADS1115 16-bit modules.
+3.  **Sensors**: 
+    *   **6-Sensor Mode**: Utilizes 2 ADS1115 modules.
+    *   **12-Sensor Mode**: Utilizes 3 ADS1115 modules.
+    *   **Environment**: DHT11 for temperature/humidity compensation.
+4.  **Flushing**: 5V/12V Fan controlled via GPIO for sensor recovery.
 
-### Dependencies
+## Installation and Setup
 
-Install the required Python packages utilizing the provided `requirements.txt` file. Python 3.9+ is recommended.
+### 1. Environment Preparation
+Ensure Python 3.9+ is installed. Clone the repository and install the consolidated dependency stack:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### Configuration
+### 2. Hardware Wiring
+Consult `src/sensors/sensor_reader.py` for specific I2C addresses (0x48, 0x49, 0x4B) and pin assignments for the DHT11 and Fan controller.
 
-Ensure your sensors are correctly wired to the hardware pins as specified in `src/sensors/sensor_reader.py` and `src/sensors/hand_controller.py`.
+## Operational Workflow
 
-## Usage
+The system operates in a three-stage pipeline: **Registration**, **Retraining**, and **Verification**.
 
-### 1. Main Application (Plug and Play CLI)
-
-To run the full biometric registration and verification cycle with live sensors, use the provided `run.sh` executable. This wrapper handles configuring the system environment to match your hardware array via the `--sensors` flag.
+### Stage 1: Subject Registration
+Launch the application and use the GUI to register new users. Raw VOC signatures are captured, processed into feature vectors, and stored in the database.
 
 ```bash
-# Launch with a 6-sensor array
+# For 6-sensor hardware
 ./run.sh --sensors 6
 
-# Launch with a 12-sensor array
+# For 12-sensor hardware
 ./run.sh --sensors 12
 ```
 
-### 2. Machine Learning Pipeline (Training)
-
-After registering new users, the models must be retrained to recognize them. Use the `train.sh` script to automate the export and training process.
+### Stage 2: Model Retraining
+After adding new subjects, the ML components must be optimized to recognize the expanded class set. Run the training wrapper to update the ensemble.
 
 ```bash
-# Retrain for 6-sensor configuration
+# Update models for the 6-sensor configuration
 ./train.sh --sensors 6
-
-# Retrain for 12-sensor configuration
-./train.sh --sensors 12
 ```
+*   **Logging**: The process provides detailed feedback on data export, class distribution, and training accuracy for each ensemble member.
 
-This script will:
-1. Export the latest registration features from the SQLite database to a CSV.
-2. Train a full ensemble (Random Forest, Extra Trees, XGBoost, and ANN).
-3. Update the models in the `models/` directory for the next app launch.
+### Stage 3: Biometric Verification
+Restart the application. The system will now load the updated neural weights and allow for real-time verification of registered subjects.
 
-## Security & Privacy
+## Machine Learning Pipeline
 
-All incoming biometric signatures are logged to an XML format which is immediately encrypted, protecting user identification vectors.
+The system utilizes a 5-model ensemble to ensure high precision and recall in variable environment conditions:
+
+1.  **Random Forest (RF)**: Robust to outliers and high-dimensional feature noise.
+2.  **Extra Trees (ET)**: Provides increased randomization to prevent overfitting on small subject cohorts.
+3.  **XGBoost (XGB)**: Gradient boosted trees for capturing non-linear relationships in sensor drift.
+4.  **Decision Tree (DT)**: Baseline classifier for rapid inference.
+5.  **Multi-Layer Perceptron (MLP)**: A neural network component for deep feature correlation.
+
+## Data Security and Privacy
+
+*   **Encryption**: All VOC signatures are logged into XML format and immediately encrypted using AES-256 (via `src/utils/aes_secure.py`).
+*   **Encapsulation**: Raw biometric data never leaves the local `data/` directory, ensuring user privacy in a decentralized architecture.
+
+## Technical Support
+For hardware calibration details or feature extraction mathematics, please review the documentation headers inside `src/core/feature_extractor.py`.
