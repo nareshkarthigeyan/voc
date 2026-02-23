@@ -1,6 +1,7 @@
 import time
 import math
 import warnings
+import os
 import busio, board
 from adafruit_ads1x15.ads1115 import ADS1115
 from adafruit_ads1x15.analog_in import AnalogIn
@@ -10,9 +11,10 @@ import numpy as np
 warnings.filterwarnings("ignore")
 
 MAX_IO_ERRORS = 3
-MIN_ACTIVE_SENSORS = 4
 MIN_VARIANCE_THRESHOLD = 0.01
 
+SENSOR_MODE = int(os.environ.get("VOC_SENSOR_MODE", "6"))
+MIN_ACTIVE_SENSORS = 8 if SENSOR_MODE == 12 else 4
 
 class VOCSensor:
     def __init__(self):
@@ -23,7 +25,8 @@ class VOCSensor:
         # ---------- ADC Modules ----------
         self.ads1 = ADS1115(self.i2c, address=0x48)
         self.ads2 = ADS1115(self.i2c, address=0x49)
-        #self.ads3 = ADS1115(self.i2c, address=0x4B)
+        if SENSOR_MODE == 12:
+            self.ads3 = ADS1115(self.i2c, address=0x4B)
 
         # ---------- ADS1 ----------
         self.mq6_1      = AnalogIn(self.ads1, 0)
@@ -34,14 +37,17 @@ class VOCSensor:
         # ---------- ADS2 ----------
         self.mems_ethanol_1 = AnalogIn(self.ads2, 0)
         self.mems_odor_1    = AnalogIn(self.ads2, 1)
-        #self.mq6_2          = AnalogIn(self.ads2, 2)
-        #self.mq135_2        = AnalogIn(self.ads2, 3)
+        
+        if SENSOR_MODE == 12:
+            self.mq6_2          = AnalogIn(self.ads2, 2)
+            self.mq135_2        = AnalogIn(self.ads2, 3)
 
         # ---------- ADS3 ----------
-        #self.mq137_2        = AnalogIn(self.ads3, 0)
-        #self.mems_nh3_2     = AnalogIn(self.ads3, 1)
-        #self.mems_ethanol_2 = AnalogIn(self.ads3, 2)
-        #self.mems_odor_2    = AnalogIn(self.ads3, 3)
+        if SENSOR_MODE == 12:
+            self.mq137_2        = AnalogIn(self.ads3, 0)
+            self.mems_nh3_2     = AnalogIn(self.ads3, 1)
+            self.mems_ethanol_2 = AnalogIn(self.ads3, 2)
+            self.mems_odor_2    = AnalogIn(self.ads3, 3)
 
         # ---------- Calibration ----------
         self.RL = 10000
@@ -148,15 +154,28 @@ class VOCSensor:
                 rs_ro = rs / self.RO[typ] if rs is not None else None
                 ppm = self.get_ppm(rs_ro, typ)
                 voc_readings[label] = ppm
+                
+            if SENSOR_MODE == 12:
+                for label, chan, typ in [
+                    ("mq6_2", self.mq6_2, "mq6"),
+                    ("mq135_2", self.mq135_2, "mq135"),
+                    ("mq137_2", self.mq137_2, "mq137")
+                ]:
+                    v = self._safe_voltage(chan)
+                    rs = self.calculate_rs(v)
+                    rs_ro = rs / self.RO[typ] if rs is not None else None
+                    ppm = self.get_ppm(rs_ro, typ)
+                    voc_readings[label] = ppm
 
             # ---------- MEMS ----------
             voc_readings["mems_nh3_1"]     = self.mems_to_ppm(self._safe_voltage(self.mems_nh3_1), "nh3")
             voc_readings["mems_ethanol_1"] = self.mems_to_ppm(self._safe_voltage(self.mems_ethanol_1), "ethanol")
             voc_readings["mems_odor_1"]    = self.mems_to_ppm(self._safe_voltage(self.mems_odor_1), "odor")
 
-            #voc_readings["mems_nh3_2"]     = self.mems_to_ppm(self._safe_voltage(self.mems_nh3_2), "nh3")
-            #voc_readings["mems_ethanol_2"] = self.mems_to_ppm(self._safe_voltage(self.mems_ethanol_2), "ethanol")
-            #voc_readings["mems_odor_2"]    = self.mems_to_ppm(self._safe_voltage(self.mems_odor_2), "odor")
+            if SENSOR_MODE == 12:
+                voc_readings["mems_nh3_2"]     = self.mems_to_ppm(self._safe_voltage(self.mems_nh3_2), "nh3")
+                voc_readings["mems_ethanol_2"] = self.mems_to_ppm(self._safe_voltage(self.mems_ethanol_2), "ethanol")
+                voc_readings["mems_odor_2"]    = self.mems_to_ppm(self._safe_voltage(self.mems_odor_2), "odor")
 
             # ---------- Validate ----------
             if not self._validate_signal(voc_readings):

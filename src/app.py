@@ -11,9 +11,12 @@ from database.feature_dao import store_features
 from core.verification_controller import verify_user
 from sensors.fan_manager import get_fan
 
+import os
+
 # ---------------- CONFIG ----------------
 SAMPLE_COUNT = 10
-ROUNDS = 10
+SENSOR_MODE = int(os.environ.get("VOC_SENSOR_MODE", "6"))
+ROUNDS = 6 if SENSOR_MODE == 12 else 10
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")

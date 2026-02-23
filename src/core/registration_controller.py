@@ -16,7 +16,10 @@ from verification_controller import generate_embedding
 from Fan_controller import FanController
 
 
-NUM_ROUNDS = 10
+import os
+
+SENSOR_MODE = int(os.environ.get("VOC_SENSOR_MODE", "6"))
+NUM_ROUNDS = 6 if SENSOR_MODE == 12 else 10
 ROUND_DELAY = 20
 RETRY_DELAY = 5
 FLUSH_DURATION = 30

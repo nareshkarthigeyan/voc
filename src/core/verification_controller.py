@@ -7,8 +7,10 @@ from Fan_controller import FanController
 
 
 
-# ---------------- PATH ----------------
-MODELS_DIR = "/home/voc12/Desktop/VOC_updated_New6/Models/trained_models"
+from pathlib import Path
+
+SENSOR_MODE = int(os.environ.get("VOC_SENSOR_MODE", "6"))
+MODELS_DIR = Path(__file__).parent.parent.parent / "models" / f"{SENSOR_MODE}_sensors"
 
 rf_model  = joblib.load(os.path.join(MODELS_DIR, "rf_model.pkl"))
 et_model  = joblib.load(os.path.join(MODELS_DIR, "et_model.pkl"))
