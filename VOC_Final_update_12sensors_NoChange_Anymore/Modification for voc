@@ -1,0 +1,17 @@
+FEATURES TO ADD:
+
+MIN
+MAX
+MEAN
+MEDIAN
+RANGE
+KRUTOSIS
+
+MODELS TO USE:
+1. RANDOM FOREST 
+2. XG BOOST
+3. ET
+4. DECISION TREES
+5. KNN
+6. ANN
+7. IF possible to take a model from Hugging face
