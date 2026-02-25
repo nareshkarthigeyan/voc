@@ -12,15 +12,18 @@ from pathlib import Path
 SENSOR_MODE = int(os.environ.get("VOC_SENSOR_MODE", "6"))
 MODELS_DIR = Path(__file__).parent.parent.parent / "models" / f"{SENSOR_MODE}_sensors"
 
-rf_model  = joblib.load(os.path.join(MODELS_DIR, "rf_model.pkl"))
-et_model  = joblib.load(os.path.join(MODELS_DIR, "et_model.pkl"))
-dt_model  = joblib.load(os.path.join(MODELS_DIR, "dt_model.pkl"))
-xgb_model = joblib.load(os.path.join(MODELS_DIR, "xgb_model.pkl"))
-ann_model = joblib.load(os.path.join(MODELS_DIR, "ann_model.pkl"))
-ann_scaler = joblib.load(os.path.join(MODELS_DIR, "ann_scaler.pkl"))
-
-label_encoder = joblib.load(os.path.join(MODELS_DIR, "label_encoder.pkl"))
-feature_order = joblib.load(os.path.join(MODELS_DIR, "feature_order.pkl"))
+def load_latest_models():
+    """Dynamically load models to ensure we fetch the latest trained weights and clear cache."""
+    return {
+        "rf": joblib.load(os.path.join(MODELS_DIR, "rf_model.pkl")),
+        "et": joblib.load(os.path.join(MODELS_DIR, "et_model.pkl")),
+        "dt": joblib.load(os.path.join(MODELS_DIR, "dt_model.pkl")),
+        "xgb": joblib.load(os.path.join(MODELS_DIR, "xgb_model.pkl")),
+        "ann": joblib.load(os.path.join(MODELS_DIR, "ann_model.pkl")),
+        "scaler": joblib.load(os.path.join(MODELS_DIR, "ann_scaler.pkl")),
+        "le": joblib.load(os.path.join(MODELS_DIR, "label_encoder.pkl")),
+        "order": joblib.load(os.path.join(MODELS_DIR, "feature_order.pkl"))
+    }
 
 FLUSH_DURATION = 30
 
@@ -37,23 +40,23 @@ def flush_chamber():
 
 # ---------------- VERIFICATION ----------------
 def verify_user(round_feature_list):
-
+    models = load_latest_models()
     all_round_probs = []
     detailed_votes = []
 
     for round_idx, feature_dict in enumerate(round_feature_list):
 
-        X = np.array([[feature_dict.get(f, 0.0) for f in feature_order]])
+        X = np.array([[feature_dict.get(f, 0.0) for f in models["order"]]])
 
         probs = {}
 
-        probs["RF"]  = rf_model.predict_proba(X)[0]
-        probs["ET"]  = et_model.predict_proba(X)[0]
-        probs["DT"]  = dt_model.predict_proba(X)[0]
-        probs["XGB"] = xgb_model.predict_proba(X)[0]
+        probs["RF"]  = models["rf"].predict_proba(X)[0]
+        probs["ET"]  = models["et"].predict_proba(X)[0]
+        probs["DT"]  = models["dt"].predict_proba(X)[0]
+        probs["XGB"] = models["xgb"].predict_proba(X)[0]
 
-        X_scaled = ann_scaler.transform(X)
-        probs["ANN"] = ann_model.predict_proba(X_scaled)[0]
+        X_scaled = models["scaler"].transform(X)
+        probs["ANN"] = models["ann"].predict_proba(X_scaled)[0]
 
         # Average model probabilities for this round
         round_prob = np.mean(list(probs.values()), axis=0)
@@ -63,12 +66,17 @@ def verify_user(round_feature_list):
         round_vote = {}
         for model_name, prob in probs.items():
             idx = np.argmax(prob)
-            model_pred_id = label_encoder.inverse_transform([idx])[0]
-            model_pred_name = get_user_name(model_pred_id) or "Unknown Name"
             conf = round(float(prob[idx] * 100), 2)
 
+            if conf >= 70:
+                model_pred_id = models["le"].inverse_transform([idx])[0]
+                model_pred_name = get_user_name(model_pred_id) or "Unknown Name"
+                user_label = f"{model_pred_name} (ID: {model_pred_id})"
+            else:
+                user_label = "No Data Found"
+                
             round_vote[model_name] = {
-                "user_name": f"{model_pred_name} (ID: {model_pred_id})",
+                "user_name": user_label,
                 "confidence": conf
             }
 
@@ -83,11 +91,15 @@ def verify_user(round_feature_list):
     final_index = np.argmax(fused_prob)
     final_confidence = round(float(fused_prob[final_index] * 100), 2)
 
-    #final_name = label_encoder.inverse_transform([final_index])[0]
-    predict_user_id = label_encoder.inverse_transform([final_index])[0]
+    #final_name = models["le"].inverse_transform([final_index])[0]
+    predict_user_id = models["le"].inverse_transform([final_index])[0]
     predict_user_name = get_user_name(predict_user_id) or f"Unknown Name"
     
     status = "VERIFIED" if final_confidence >= 70 else "NOT VERIFIED"
+
+    if status == "NOT VERIFIED":
+        predict_user_name = "No Data Found"
+        predict_user_id = "No Data Found"
 
     result = {
         "status": status,
