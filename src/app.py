@@ -504,9 +504,69 @@ class MainGUI(ctk.CTk):
             self.safe_ui(lambda: log_box.see("end"))
             messagebox.showinfo("Reinforcement Saved", f"Data added for {correct_name} ({correct_id}).\n\nRun Model Training to update the models.")
 
-        self.safe_ui(lambda: ctk.CTkButton(self.frame, text="⚠ Flag Incorrect — Reinforce", fg_color=ACCENT_RED, 
+        self.safe_ui(lambda: ctk.CTkButton(self.frame, text="⚠ Flag Incorrect — Reinforce (-1)", fg_color=ACCENT_RED, 
                                            hover_color="#DA3633", text_color="white", height=40,
                                            font=("Courier New", 13, "bold"), command=reinforce).pack(pady=10))
+                                           
+        # ── Select Actual Person / Positive Reinforcement Button ──
+        def select_actual_person():
+            try:
+                all_users = get_all_users()
+            except:
+                all_users = []
+                
+            if not all_users:
+                messagebox.showerror("Error", "No registered users found in the database. Please register users first.")
+                return
+                
+            # Create a simple mapping to visually lookup IDs
+            users_list = "\n".join([f"{name} (ID: {uid})" for uid, name in all_users])
+            
+            dialog = ctk.CTkInputDialog(
+                text=f"Registered Users:\n{users_list}\n\nEnter the Exact USER ID of the actual person:",
+                title="Select Actual Identity"
+            )
+            actual_id = dialog.get_input()
+            
+            if not actual_id:
+                return
+                
+            # Find the corresponding name
+            actual_name = next((name for uid, name in all_users if uid == actual_id), "Unknown")
+            
+            # RLHF: Capture the ANN's predicted output failure details
+            ann_predicted_id = result.get('user_id', 'unknown')
+            ann_predicted_name = result.get('user_name', 'unknown')
+            ann_confidence = float(result.get('confidence', 0.0))
+            
+            # Identify the correct reward based on if the ANN was originally correct or not
+            # If the ANN correctly matched what the user manually selected: +1
+            # If the ANN differed from manual selection: -1
+            rl_reward = 1 if ann_predicted_id == actual_id else -1
+            
+            # Store features into the replay buffer as manually validated ground-truth
+            for i in range(ROUNDS):
+                chunk = samples[i*SAMPLE_COUNT:(i+1)*SAMPLE_COUNT]
+                if len(chunk) > 0:
+                    features_dict = extract_features(chunk)
+                    
+                    store_feedback(user_id=actual_id, 
+                                   predicted_id=ann_predicted_id, 
+                                   predicted_name=ann_predicted_name, 
+                                   confidence=ann_confidence, 
+                                   reward=rl_reward, 
+                                   feature_dict=features_dict)
+            
+            self.stats["flagged"] += 1
+            reward_str = "POSITIVE (+1)" if rl_reward == 1 else "NEGATIVE (-1)"
+            
+            self.safe_ui(lambda: log_box.insert("end", f"\n[RLHF VALIDATION] Manual selection bound to {actual_name} ({actual_id}).\nReward Assignment: {reward_str}\nStored in replay buffer.\n"))
+            self.safe_ui(lambda: log_box.see("end"))
+            messagebox.showinfo("Validated", f"Identity validated as {actual_name}.\nCorrection mapped for offline ANN retraining.")
+
+        self.safe_ui(lambda: ctk.CTkButton(self.frame, text="✅ Select Actual Person — Validate (+1/-1)", fg_color=ACCENT2, 
+                                           hover_color="#2EA043", text_color="white", height=40,
+                                           font=("Courier New", 13, "bold"), command=select_actual_person).pack(pady=5))
 
 if __name__ == "__main__":
     app = MainGUI()
