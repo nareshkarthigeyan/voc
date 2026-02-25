@@ -17,7 +17,7 @@ from core.feature_extractor import extract_features
 from database.logger import log_voc as log_voc_encrypted
 from database.logger_simple import log_voc as log_voc_simple
 from database.feature_dao import store_features, store_radar_profile, get_radar_profile
-from database.user_dao import insert_user
+from database.user_dao import insert_user, get_all_users
 from core.verification_controller import verify_user
 from sensors.fan_manager import get_fan
 from core.radar_handler import RadarHandler
@@ -238,8 +238,11 @@ class MainGUI(ctk.CTk):
         ctk.CTkLabel(outer, text="VOC BIOMETRIC PLATFORM", font=("Courier New", 32, "bold"), text_color=TEXT_PRIMARY).pack(pady=10)
         ctk.CTkLabel(outer, text="Multimodal Gas-Phase Identity Verification", font=("Courier New", 14), text_color=TEXT_MUTED).pack(pady=(0, 40))
 
-        btn_container = ctk.CTkFrame(outer, fg_color="transparent")
-        btn_container.pack()
+        content_frame = ctk.CTkFrame(outer, fg_color="transparent")
+        content_frame.pack()
+
+        btn_container = ctk.CTkFrame(content_frame, fg_color="transparent")
+        btn_container.pack(side="left", padx=20)
 
         def _big_btn(text, subtitle, clr, cmd):
             card = ctk.CTkFrame(btn_container, fg_color=BG_CARD, border_width=1, border_color=BORDER, width=400, height=100)
@@ -252,6 +255,24 @@ class MainGUI(ctk.CTk):
         _big_btn("USER ENROLLMENT", "Register new biometric profile", ACCENT, self.registration_mode)
         _big_btn("IDENTITY CHECK", "Verify existing user identity", ACCENT2, self.verification_mode)
         _big_btn("SYSTEM TRAINING", "Update ML ensemble parameters", "orange", self.training_mode)
+        
+        # Stats container for real-time user database representation
+        stats_frame = ctk.CTkFrame(content_frame, fg_color=BG_CARD, border_width=1, border_color=BORDER, width=300, height=340)
+        stats_frame.pack(side="left", padx=20, pady=10)
+        stats_frame.pack_propagate(False)
+        
+        try:
+            all_users = get_all_users()
+        except:
+            all_users = []
+            
+        ctk.CTkLabel(stats_frame, text=f"REGISTERED USERS: {len(all_users)}", font=("Courier New", 14, "bold"), text_color=ACCENT).pack(pady=(20, 10))
+        
+        scroll = ctk.CTkScrollableFrame(stats_frame, fg_color="transparent")
+        scroll.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        for uid, name in all_users:
+            ctk.CTkLabel(scroll, text=f"• {name}  [{uid}]", font=("Courier New", 11), text_color=TEXT_PRIMARY, anchor="w").pack(fill="x", pady=2)
 
     def training_mode(self):
         self.clear()
@@ -275,6 +296,7 @@ class MainGUI(ctk.CTk):
 
     def capture_mode(self, mode):
         self.clear()
+        self._radar_data = None
         t_clr = ACCENT if mode=="registration" else ACCENT2
         
         left = ctk.CTkFrame(self.frame, fg_color="transparent", width=400)
@@ -405,6 +427,13 @@ class MainGUI(ctk.CTk):
                 "registration": profile["registration_readings"],
                 "verification": v_means,
                 "user_name": result["user_name"]
+            }
+        else:
+            self._radar_data = {
+                "labels": SENSOR_NAMES,
+                "registration": [0] * len(SENSOR_NAMES),
+                "verification": v_means,
+                "user_name": "No Data Found (Missing Target)"
             }
         
         # ── Flag Incorrect / Reinforcement Button ──
