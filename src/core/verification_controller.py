@@ -3,7 +3,7 @@ import numpy as np
 import os
 import time
 from database.user_dao import get_user_name
-from sensors.Fan_controller import FanController
+from sensors.fan_controller import FanController
 
 
 

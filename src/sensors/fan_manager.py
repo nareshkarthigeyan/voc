@@ -1,4 +1,4 @@
-from sensors.Fan_controller import FanController
+from sensors.fan_controller import FanController
 
 _fan_instance = None
 
