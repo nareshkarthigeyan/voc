@@ -27,11 +27,23 @@ def train_ensemble(csv_path, sensor_mode):
         print("[ERROR] Dataset is empty.")
         return
 
+    print("\n[SANITY CHECK]")
+    print(f"  Total rows:        {len(df)}")
+    print(f"  Unique users:      {df['user_id'].nunique()}")
+    print(f"  Rows per user:\n{df['user_id'].value_counts()}")
+    print(f"  Columns with all zeros: {(df == 0).all().sum()}")
+    print(f"  Any NaN:           {df.isnull().any().any()}\n")
+
     print(f"[LOG] Dataset shape: {df.shape}")
-    print(f"[LOG] Class distribution:\n{df['user_id'].value_counts()}")
 
     y = df["user_id"]
     X = df.drop(columns=["user_id", "round_no"])
+
+    # Drop zero-variance columns (dead sensors)
+    zero_var_cols = X.columns[X.std() < 1e-6].tolist()
+    if zero_var_cols:
+        print(f"[WARN] Dropping zero-variance features: {zero_var_cols}")
+        X = X.drop(columns=zero_var_cols)
 
     feature_order = list(X.columns)
     print(f"[LOG] Features: {len(feature_order)}")
@@ -43,9 +55,15 @@ def train_ensemble(csv_path, sensor_mode):
 
     # ── Sanity check: need enough samples per class for CV ──────────────────
     min_samples = y.value_counts().min()
-    n_splits = min(5, min_samples)
+    print(f"[LOG] Min samples per class: {min_samples}")
+
+    if min_samples < 20:
+        print(f"[ABORT] Need at least 20 samples per user. Currently: {min_samples}. Collect more data.")
+        return
+
+    n_splits = min(5, min_samples // 4)  # conservative: each fold has at least 4 samples
     if n_splits < 2:
-        print("[WARN] Too few samples per class for cross-validation. Need more data.")
+        print("[ABORT] Still too few samples even for 2-fold CV.")
         return
 
     # ── Train / test split (stratified) ─────────────────────────────────────
@@ -88,9 +106,9 @@ def train_ensemble(csv_path, sensor_mode):
             random_state=42
         ),
         "xgb_model": XGBClassifier(
-            n_estimators=300,
-            max_depth=8,
-            learning_rate=0.05,
+            n_estimators=100,
+            max_depth=3,          # shallow — critical for small datasets
+            learning_rate=0.1,
             subsample=0.8,
             colsample_bytree=0.8,
             use_label_encoder=False,

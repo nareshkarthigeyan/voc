@@ -33,8 +33,8 @@ if SENSOR_MODE == 12:
         print("[WARN] Fingerprint library (pyfingerprint) not found.")
 
 # ---------------- CONFIG ----------------
-SAMPLE_COUNT = 10
-ROUNDS = 10
+SAMPLE_COUNT = 30
+ROUNDS = 50
 SENSOR_NAMES = ["Ethanol", "Methane", "CO2", "Ammonia", "H2S", "Toluene"]
 
 # ─── THEME ────────────────────────────────────────────────────────────────────
