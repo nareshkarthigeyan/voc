@@ -20,6 +20,27 @@ def store_features(user_id, feature_dict, round_no):
     conn.commit()
     conn.close()
 
+def store_feedback(user_id, predicted_id, predicted_name, confidence, reward, feature_dict):
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    columns = list(feature_dict.keys())
+    values = [float(feature_dict[col]) for col in columns]
+    placeholders = ",".join(["?"] * (len(values) + 5))
+    
+    from datetime import datetime
+    timestamp = datetime.now().isoformat()
+
+    query = f"""
+        INSERT INTO feedback_buffer
+        (user_id, predicted_id, predicted_name, confidence, reward, timestamp, {",".join(columns)})
+        VALUES ({placeholders})
+    """
+    
+    cur.execute(query, [user_id, predicted_id, predicted_name, confidence, reward, timestamp] + values)
+    conn.commit()
+    conn.close()
+
 def store_radar_profile(user_id, user_name, radar_plot_path, registration_readings):
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()

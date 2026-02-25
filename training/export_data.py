@@ -21,13 +21,41 @@ def export_to_csv(output_path):
         
         query = "SELECT * FROM features"
         df = pd.read_sql_query(query, conn)
+        
+        # RLHF: Experience Replay & Oversampling from Feedback Buffer
+        try:
+            fb_query = "SELECT * FROM feedback_buffer"
+            fb_df = pd.read_sql_query(fb_query, conn)
+            
+            if not fb_df.empty:
+                print(f"[LOG] RLHF: Found {len(fb_df)} human-corrected feedback samples.")
+                # Drop tracking columns to align schema with `features`
+                cols_to_drop = ['id', 'predicted_id', 'predicted_name', 'confidence', 'reward', 'timestamp']
+                fb_df_clean = fb_df.drop(columns=[col for col in cols_to_drop if col in fb_df.columns], errors='ignore')
+                
+                # Assign a synthetic 'round_no' if it is missing (as feedback buffer doesn't explicitly guarantee ordering tracking)
+                if 'round_no' in df.columns and 'round_no' not in fb_df_clean.columns:
+                    fb_df_clean['round_no'] = 1 
+                    
+                # Oversample 5x to increase decision-boundary importance (Weighted Retraining)
+                oversampled_fb = pd.concat([fb_df_clean] * 5, ignore_index=True)
+                
+                # Prevent alignment issues before concat
+                if 'id' in df.columns:
+                    df = df.drop(columns=['id'])
+                
+                df = pd.concat([df, oversampled_fb], ignore_index=True)
+                print(f"[LOG] RLHF: Appended {len(oversampled_fb)} weighted feedback loops to the training buffer.")
+        except Exception as e:
+            print(f"[WARNING] RLHF Replay Buffer query skipped or failed: {str(e)}")
+            
         conn.close()
         
         if df.empty:
-            print("[WARNING] The 'features' table is empty. No data to export.")
+            print("[WARNING] The 'features' dataset is completely empty. No data to export.")
             return False
             
-        print(f"[LOG] Successfully retrieved {len(df)} records from 'features' table.")
+        print(f"[LOG] Successfully compiled {len(df)} total training vectors for the ANN pipeline.")
         
         # Drop the auto-increment id if it exists
         if 'id' in df.columns:

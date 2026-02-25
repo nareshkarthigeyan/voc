@@ -38,6 +38,21 @@ def init_db(feature_columns=None):
                 FOREIGN KEY(user_id) REFERENCES users(user_id)
             )
         """)
+        
+        # ── Reinforcement Feedback Replay Buffer ──
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS feedback_buffer (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT,
+                predicted_id TEXT,
+                predicted_name TEXT,
+                confidence REAL,
+                reward INTEGER,
+                timestamp TEXT,
+                {columns_sql},
+                FOREIGN KEY(user_id) REFERENCES users(user_id)
+            )
+        """)
 
     # ── Radar Profiles Table ──
     cur.execute("""

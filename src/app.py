@@ -16,7 +16,7 @@ from sensors.hand_controller import HandController
 from core.feature_extractor import extract_features
 from database.logger import log_voc as log_voc_encrypted
 from database.logger_simple import log_voc as log_voc_simple
-from database.feature_dao import store_features, store_radar_profile, get_radar_profile
+from database.feature_dao import store_features, store_radar_profile, get_radar_profile, store_feedback
 from database.user_dao import insert_user, get_all_users
 from core.verification_controller import verify_user
 from sensors.fan_manager import get_fan
@@ -480,15 +480,27 @@ class MainGUI(ctk.CTk):
             # Store correct user in users table
             insert_user(correct_id, correct_name)
             
-            # Store features under the correct user ID for reinforcement
+            # RLHF: Capture the ANN's predicted output failure details
+            ann_predicted_id = result.get('user_id', 'unknown')
+            ann_predicted_name = result.get('user_name', 'unknown')
+            ann_confidence = float(result.get('confidence', 0.0))
+            
+            # Store features under the correct user ID for reinforcement and into the replay buffer
             for i in range(ROUNDS):
                 chunk = samples[i*SAMPLE_COUNT:(i+1)*SAMPLE_COUNT]
                 if len(chunk) > 0:
-                    store_features(correct_id, extract_features(chunk), i+1)
+                    features_dict = extract_features(chunk)
+                    # Reward is -1 because the prediction was incorrect
+                    store_feedback(user_id=correct_id, 
+                                   predicted_id=ann_predicted_id, 
+                                   predicted_name=ann_predicted_name, 
+                                   confidence=ann_confidence, 
+                                   reward=-1, 
+                                   feature_dict=features_dict)
             
             self.stats["flagged"] += 1
             
-            self.safe_ui(lambda: log_box.insert("end", f"\n[REINFORCEMENT] Data stored for {correct_name} ({correct_id}).\nRe-train models to apply.\n"))
+            self.safe_ui(lambda: log_box.insert("end", f"\n[RLHF REINFORCEMENT] Feedback buffer appended for {correct_name} ({correct_id}).\nRetraining will oversample this correction.\n"))
             self.safe_ui(lambda: log_box.see("end"))
             messagebox.showinfo("Reinforcement Saved", f"Data added for {correct_name} ({correct_id}).\n\nRun Model Training to update the models.")
 
