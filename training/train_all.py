@@ -50,7 +50,7 @@ def train_ensemble(csv_path, sensor_mode):
         "et_model": ExtraTreesClassifier(n_estimators=200, max_depth=30, class_weight="balanced", random_state=42),
         "dt_model": DecisionTreeClassifier(max_depth=20, class_weight="balanced", random_state=42),
         "xgb_model": XGBClassifier(use_label_encoder=False, eval_metric='mlogloss', n_estimators=200, max_depth=15, learning_rate=0.05, random_state=42),
-        "ann_model": MLPClassifier(hidden_layer_sizes=(256, 128, 64), max_iter=200, learning_rate_init=0.005, early_stopping=True, random_state=42)
+        "ann_model": MLPClassifier(hidden_layer_sizes=(256, 128, 64), max_iter=200, learning_rate="adaptive", learning_rate_init=0.005, early_stopping=True, random_state=42)
     }
     
     output_dir = os.path.join("models", f"{sensor_mode}_sensors")

@@ -196,6 +196,13 @@ class MainGUI(ctk.CTk):
         self._scatter_data = None
         self._radar_data   = None
         self._registered_profiles = {}
+        
+        # Real-time monitoring metrics
+        self.stats = {
+            "total": 0,
+            "success": 0,
+            "flagged": 0
+        }
 
         self._build_sidebar()
         self.frame = ctk.CTkFrame(self, fg_color=BG_DARK, corner_radius=0)
@@ -266,10 +273,18 @@ class MainGUI(ctk.CTk):
         except:
             all_users = []
             
-        ctk.CTkLabel(stats_frame, text=f"REGISTERED USERS: {len(all_users)}", font=("Courier New", 14, "bold"), text_color=ACCENT).pack(pady=(20, 10))
+        ctk.CTkLabel(stats_frame, text=f"REGISTERED USERS: {len(all_users)}", font=("Courier New", 14, "bold"), text_color=ACCENT).pack(pady=(15, 5))
+        
+        # Calculate real-time stats
+        total = self.stats["total"]
+        success = self.stats["success"]
+        rate = (success/total*100) if total > 0 else 0.0
+        
+        ctk.CTkLabel(stats_frame, text=f"SUCCESS RATE: {rate:.1f}%", font=("Courier New", 12), text_color=ACCENT2).pack(pady=2)
+        ctk.CTkLabel(stats_frame, text=f"FLAGGED INCORRECT: {self.stats['flagged']}", font=("Courier New", 12), text_color=ACCENT_RED).pack(pady=(2, 10))
         
         scroll = ctk.CTkScrollableFrame(stats_frame, fg_color="transparent")
-        scroll.pack(fill="both", expand=True, padx=10, pady=10)
+        scroll.pack(fill="both", expand=True, padx=10, pady=5)
         
         for uid, name in all_users:
             ctk.CTkLabel(scroll, text=f"• {name}  [{uid}]", font=("Courier New", 11), text_color=TEXT_PRIMARY, anchor="w").pack(fill="x", pady=2)
@@ -296,7 +311,7 @@ class MainGUI(ctk.CTk):
 
     def capture_mode(self, mode):
         self.clear()
-        self._radar_data = None
+        self._scatter_data = None
         t_clr = ACCENT if mode=="registration" else ACCENT2
         
         left = ctk.CTkFrame(self.frame, fg_color="transparent", width=400)
@@ -316,6 +331,8 @@ class MainGUI(ctk.CTk):
         log_box.pack(side="right", fill="both", padx=30, pady=30)
 
         def start():
+            self.safe_ui(lambda: log_box.delete("1.0", "end"))
+            
             if SENSOR_MODE == 12 and self.fp_sensor:
                 self.safe_ui(lambda: status_l.configure(text="Place finger on scanner..."))
                 res = self.fp_sensor.enroll("user", "id") if mode=="registration" else self.fp_sensor.authenticate()
@@ -429,12 +446,18 @@ class MainGUI(ctk.CTk):
                 "user_name": result["user_name"]
             }
         else:
+            # Represent missing comparison data using zero/null placeholders explicitly to prevent residual mapping
             self._radar_data = {
                 "labels": SENSOR_NAMES,
-                "registration": [0] * len(SENSOR_NAMES),
+                "registration": [0.0] * len(SENSOR_NAMES),
                 "verification": v_means,
                 "user_name": "No Data Found (Missing Target)"
             }
+        
+        # Update metrics
+        self.stats["total"] += 1
+        if result['status'] == "VERIFIED":
+            self.stats["success"] += 1
         
         # ── Flag Incorrect / Reinforcement Button ──
         def reinforce():
@@ -462,6 +485,8 @@ class MainGUI(ctk.CTk):
                 chunk = samples[i*SAMPLE_COUNT:(i+1)*SAMPLE_COUNT]
                 if len(chunk) > 0:
                     store_features(correct_id, extract_features(chunk), i+1)
+            
+            self.stats["flagged"] += 1
             
             self.safe_ui(lambda: log_box.insert("end", f"\n[REINFORCEMENT] Data stored for {correct_name} ({correct_id}).\nRe-train models to apply.\n"))
             self.safe_ui(lambda: log_box.see("end"))
