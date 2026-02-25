@@ -303,32 +303,61 @@ class MainGUI(ctk.CTk):
             uid = id_e.get() if mode=="registration" else "unknown"
             uname = name_e.get() if mode=="registration" else "unknown"
 
+            # Pre-check sensor connectivity
+            self.safe_ui(lambda: status_l.configure(text="Validating sensors..."))
+            ch_status, _, _ = self.sensor.read_sensors()
+            if ch_status != "OK":
+                self.safe_ui(lambda: messagebox.showerror("Sensor Error", f"Hardware Feedback: {ch_status}"))
+                self.safe_ui(lambda: status_l.configure(text="Ready"))
+                return
+
             self.safe_ui(lambda: status_l.configure(text="Waiting for hand..."))
             while not self.hand.hand_present(): time.sleep(0.1)
             
             self.hand.start_sampling()
             all_samples = []
+            
             for r in range(1, ROUNDS + 1):
                 samples = []
                 for s in range(SAMPLE_COUNT):
+                    # Check if hand is still present during sampling
+                    if not self.hand.hand_present():
+                        self.safe_ui(lambda: status_l.configure(text="Hand removed! Waiting..."))
+                        while not self.hand.hand_present(): time.sleep(0.2)
+                        
+                    self.safe_ui(lambda v=(len(all_samples)/(ROUNDS*SAMPLE_COUNT)), r=r, s=s: 
+                                 [prog.set(v), status_l.configure(text=f"Scanning Round {r}/{ROUNDS} - Sample {s+1}/{SAMPLE_COUNT}")])
+                    
                     res, voc, _ = self.sensor.read_sensors()
                     if res == "OK": 
                         samples.append(voc)
                         all_samples.append(voc)
-                    self.safe_ui(lambda v=(len(all_samples)/(ROUNDS*SAMPLE_COUNT)): prog.set(v))
                     time.sleep(0.2)
                 
-                features = extract_features(samples)
-                if mode=="registration": store_features(uid, features, r)
+                if len(samples) > 0:
+                    features = extract_features(samples)
+                    if mode=="registration": store_features(uid, features, r)
+                else:
+                    self.safe_ui(lambda: messagebox.showerror("Read Error", f"Round {r} collected no valid readings. Retrying..."))
             
             self.hand.stop_sampling()
+            
+            if len(all_samples) == 0:
+                self.safe_ui(lambda: messagebox.showerror("Failure", "No valid data collected."))
+                self.safe_ui(lambda: status_l.configure(text="Ready"))
+                return
+                
             if mode=="registration":
                 log_voc_simple("REGISTRATION", uname, uid, all_samples)
                 RadarHandler().generate_radar_plot(uid, np.mean([list(s.values()) for s in all_samples], axis=0), uname)
+                self.safe_ui(lambda: status_l.configure(text="Registration Packaged!"))
                 self.safe_ui(lambda: messagebox.showinfo("Success", "Registration packaged!"))
             else:
-                result = verify_user([extract_features(all_samples[i:i+SAMPLE_COUNT]) for i in range(0, len(all_samples), SAMPLE_COUNT)])
+                self.safe_ui(lambda: status_l.configure(text="Processing Verification..."))
+                chunks = [extract_features(all_samples[i:i+SAMPLE_COUNT]) for i in range(0, len(all_samples), SAMPLE_COUNT) if len(all_samples[i:i+SAMPLE_COUNT]) > 0]
+                result = verify_user(chunks)
                 self._show_ver_result(result, all_samples, log_box)
+                self.safe_ui(lambda: status_l.configure(text="Verification Complete!"))
 
         ctk.CTkButton(left, text="BEGIN", height=50, width=340, fg_color=t_clr, text_color=BG_DARK, 
                       command=lambda: threading.Thread(target=start, daemon=True).start()).pack(pady=20)
