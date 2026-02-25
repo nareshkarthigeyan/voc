@@ -17,6 +17,7 @@ from core.feature_extractor import extract_features
 from database.logger import log_voc as log_voc_encrypted
 from database.logger_simple import log_voc as log_voc_simple
 from database.feature_dao import store_features, store_radar_profile, get_radar_profile
+from database.user_dao import insert_user
 from core.verification_controller import verify_user
 from sensors.fan_manager import get_fan
 from core.radar_handler import RadarHandler
@@ -348,6 +349,8 @@ class MainGUI(ctk.CTk):
                 return
                 
             if mode=="registration":
+                # Store user name in users table (critical for verification name lookup)
+                insert_user(uid, uname)
                 log_voc_simple("REGISTRATION", uname, uid, all_samples)
                 RadarHandler().generate_radar_plot(uid, np.mean([list(s.values()) for s in all_samples], axis=0), uname)
                 self.safe_ui(lambda: status_l.configure(text="Registration Packaged!"))
@@ -363,13 +366,39 @@ class MainGUI(ctk.CTk):
                       command=lambda: threading.Thread(target=start, daemon=True).start()).pack(pady=20)
 
     def _show_ver_result(self, result, samples, log_box):
-        self.safe_ui(lambda: log_box.insert("end", f"\nVerification: {result['status']}\nConfidence: {result['confidence']}%\nUser: {result['user_name']}\n"))
+        # ── Print per-model predictions per round ──
+        def _render_results():
+            log_box.insert("end", "\n" + "═"*60 + "\n")
+            log_box.insert("end", "  VERIFICATION RESULTS\n")
+            log_box.insert("end", "═"*60 + "\n\n")
+            
+            round_details = result.get('round_details', [])
+            for rd in round_details:
+                log_box.insert("end", f"── Round {rd['round']} ──\n")
+                for model_name, vote in rd['votes'].items():
+                    log_box.insert("end", f"  {model_name:>4s}: {vote['user_name']}  [{vote['confidence']}%]\n")
+                log_box.insert("end", "\n")
+            
+            log_box.insert("end", "═"*60 + "\n")
+            status_color = "[VERIFIED]" if result['status'] == "VERIFIED" else "[NOT VERIFIED]"
+            log_box.insert("end", f"  {status_color} FINAL RESULT: {result['status']}\n")
+            log_box.insert("end", f" Name : {result['user_name']}\n")
+            log_box.insert("end", f" ID   : {result['user_id']}\n")
+            log_box.insert("end", f" Score: {result['confidence']}%\n")
+            log_box.insert("end", "═"*60 + "\n")
+            log_box.see("end")
+        
+        self.safe_ui(_render_results)
+        
         if result['status'] == "VERIFIED":
             threading.Thread(target=get_fan().flush, args=(20,), daemon=True).start()
         
         # Build Radar Data for Analytics
         v_means = np.mean([list(s.values()) for s in samples], axis=0)
-        profile = get_radar_profile(result['user_id'])
+        try:
+            profile = get_radar_profile(result['user_id'])
+        except Exception:
+            profile = None
         if profile:
             self._radar_data = {
                 "labels": SENSOR_NAMES,
@@ -378,16 +407,40 @@ class MainGUI(ctk.CTk):
                 "user_name": result["user_name"]
             }
         
-        # Add reinforcement button
+        # ── Flag Incorrect / Reinforcement Button ──
         def reinforce():
-            dialog = ctk.CTkInputDialog(text="Enter Correct ID:", title="Reinforce")
-            cid = dialog.get_input()
-            if cid:
-                for i in range(ROUNDS):
-                    store_features(cid, extract_features(samples[i*SAMPLE_COUNT:(i+1)*SAMPLE_COUNT]), i+1)
-                messagebox.showinfo("Done", "Reinforcement data added.")
+            dialog = ctk.CTkInputDialog(
+                text="Verification was wrong.\nEnter CORRECT Name:",
+                title="Flag Incorrect — Enter Correct Name"
+            )
+            correct_name = dialog.get_input()
+            if not correct_name:
+                return
+            
+            dialog2 = ctk.CTkInputDialog(
+                text=f"Name: {correct_name}\nEnter CORRECT User ID:",
+                title="Flag Incorrect — Enter Correct ID"
+            )
+            correct_id = dialog2.get_input()
+            if not correct_id:
+                return
+            
+            # Store correct user in users table
+            insert_user(correct_id, correct_name)
+            
+            # Store features under the correct user ID for reinforcement
+            for i in range(ROUNDS):
+                chunk = samples[i*SAMPLE_COUNT:(i+1)*SAMPLE_COUNT]
+                if len(chunk) > 0:
+                    store_features(correct_id, extract_features(chunk), i+1)
+            
+            self.safe_ui(lambda: log_box.insert("end", f"\n[REINFORCEMENT] Data stored for {correct_name} ({correct_id}).\nRe-train models to apply.\n"))
+            self.safe_ui(lambda: log_box.see("end"))
+            messagebox.showinfo("Reinforcement Saved", f"Data added for {correct_name} ({correct_id}).\n\nRun Model Training to update the models.")
 
-        self.safe_ui(lambda: ctk.CTkButton(self.frame, text="Flag Incorrect", fg_color=ACCENT_RED, command=reinforce).pack(pady=10))
+        self.safe_ui(lambda: ctk.CTkButton(self.frame, text="⚠ Flag Incorrect — Reinforce", fg_color=ACCENT_RED, 
+                                           hover_color="#DA3633", text_color="white", height=40,
+                                           font=("Courier New", 13, "bold"), command=reinforce).pack(pady=10))
 
 if __name__ == "__main__":
     app = MainGUI()

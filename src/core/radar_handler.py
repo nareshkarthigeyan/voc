@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 from datetime import datetime
+from database.feature_dao import store_radar_profile
 
 class RadarHandler:
     def __init__(self, output_dir="data/radar_plots"):
@@ -11,7 +12,8 @@ class RadarHandler:
 
     def generate_radar_plot(self, user_id, registration_readings, user_name):
         """
-        Generates a radar plot for a user's registration profile.
+        Generates a radar plot for a user's registration profile
+        and stores it in the database.
         """
         N = len(self.sensor_names)
         
@@ -49,4 +51,8 @@ class RadarHandler:
         plt.savefig(filepath)
         plt.close()
         
+        # Store radar profile in database for verification lookup
+        store_radar_profile(user_id, user_name, filepath, readings)
+        
         return filepath, normalized
+

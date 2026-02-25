@@ -49,6 +49,16 @@ def get_radar_profile(user_id):
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     
+    # Ensure table exists (backward compatibility with old databases)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS radar_profiles (
+            user_id TEXT PRIMARY KEY,
+            user_name TEXT,
+            radar_plot_path TEXT,
+            registration_readings TEXT
+        )
+    """)
+    
     cur.execute("SELECT user_name, radar_plot_path, registration_readings FROM radar_profiles WHERE user_id=?", (user_id,))
     row = cur.fetchone()
     conn.close()
